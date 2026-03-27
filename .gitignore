@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environment
+.venv/
+venv/
+
+# Environment / secrets
+.env
+.env.*
+
+# Data artifacts (large / generated)
+data/faiss_index/
+data/runs/
+data/sessions/
+data/cache/
+
+# CI artifacts
+artifacts/
+
+# Source documents (large PDFs)
+docs/*.pdf
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
