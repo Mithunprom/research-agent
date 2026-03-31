@@ -19,3 +19,4 @@ pandas
 tqdm
 fastapi
 uvicorn[standard]
+pytest

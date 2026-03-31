@@ -166,6 +166,7 @@ class State(TypedDict):
     web_k: int
     max_iters: int
     iters: int
+    force_web: bool
 
 
 def format_context(state: State) -> str:
@@ -294,6 +295,7 @@ def make_graph():
         state["prior_notes"] = notes[-4000:] if notes else ""
         turns = load_recent_turns(state["session_id"], n=6)
         state["recent_turns"] = format_turns_for_prompt(turns)
+        state["force_web"] = bool(state.get("force_web", False))
         return state
 
     def plan(state: State) -> State:
@@ -307,6 +309,8 @@ def make_graph():
             recent_turns=state.get("recent_turns", ""),
             question=state["question"],
         )
+        
+
         resp = llm.invoke(msg)
         data = extract_json_block(resp.content) or {}
 
@@ -315,10 +319,15 @@ def make_graph():
         state["clarifying_question"] = (data.get("clarifying_question") or "").strip()
         state["retrieval_mode"] = (data.get("retrieval_mode") or "hybrid").strip()
 
-        # allow planner to override k values
+        
         state["k_local"] = int(data.get("local_k", state.get("k_local", 20)) or 20)
         state["web_k"] = int(data.get("web_k", state.get("web_k", 6)) or 6)
-
+        # allow planner to override k values
+        if state.get("force_web"):
+            state["retrieval_mode"] = "web_first"
+            # make sure web_k is non-trivial
+            state["web_k"] = max(int(state.get("web_k", 6)), 6)
+            
         return state
 
     def clarify(state: State) -> State:

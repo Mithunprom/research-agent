@@ -29,14 +29,18 @@ jobs:
         run: |
           pytest -q
 
+      # Local docs index build (still useful even if web is forced)
       - name: Build local index (from docs/)
         run: |
           python -m src.rag_ingest_local
 
-      - name: Eval smoke gate
+      - name: Eval smoke gate (WITH WEB)
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+          EVAL_N: "5"
+          MIN_AVG_JUDGE: "0.70"
+          MIN_PASS_RATE: "0.60"
         run: |
           python -m src.eval_smoke
 

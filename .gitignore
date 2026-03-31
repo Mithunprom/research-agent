@@ -15,10 +15,7 @@ venv/
 .env.*
 
 # Data artifacts (large / generated)
-data/faiss_index/
-data/runs/
-data/sessions/
-data/cache/
+data/
 
 # CI artifacts
 artifacts/
