@@ -38,7 +38,7 @@ OUT_PATH = Path("artifacts/eval_smoke_report.json")
 MIN_AVG_JUDGE = float(os.getenv("MIN_AVG_JUDGE", "0.75"))
 MIN_PASS_RATE = float(os.getenv("MIN_PASS_RATE", "0.80"))
 N_EXAMPLES = int(os.getenv("EVAL_N", "10"))
-
+WEB_SEARCH = os.getenv("WEB_SEARCH", "0") == "1"
 
 def main() -> None:
     """Run the smoke evaluation and enforce quality thresholds.
@@ -76,7 +76,7 @@ def main() -> None:
             "question": q,
             "session_id": session_id,
             "max_iters": 5,
-            "force_web": False,     # ✅ force Tavily/web path in CI
+            "force_web": WEB_SEARCH,     # ✅ force Tavily/web path in CI
         })
 
         judge = out.get("judge", {}) or {}

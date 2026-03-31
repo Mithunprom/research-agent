@@ -1,0 +1,101 @@
+# =============================================================================
+# Nightly Web Eval — Runs automatically every night on a schedule.
+#
+# This is a deeper evaluation than the CI smoke test. It runs more questions
+# (20 vs 5) with web search enabled, catching quality regressions that the
+# fast CI gate might miss.
+#
+# The schedule uses cron syntax (same as Linux cron jobs):
+#   "0 9 * * *" means "minute 0, hour 9, every day, every month, every weekday"
+#   = 09:00 UTC daily (~2am Pacific Time)
+#
+# "workflow_dispatch" allows you to also trigger this manually from the
+# GitHub Actions UI (Actions tab → select workflow → "Run workflow" button).
+# =============================================================================
+
+# ---------- Metadata ----------
+name: nightly_web_eval
+
+# ---------- Triggers ----------
+on:
+  # "schedule" runs the workflow on a cron timer.
+  # Cron format: "minute hour day-of-month month day-of-week"
+  #   0 9 * * *
+  #   │ │ │ │ │
+  #   │ │ │ │ └─ every day of the week (Mon-Sun)
+  #   │ │ │ └─── every month (Jan-Dec)
+  #   │ │ └───── every day of the month (1-31)
+  #   │ └─────── at hour 9 (UTC)
+  #   └───────── at minute 0
+  schedule:
+    - cron: "0 9 * * *"
+
+  # "workflow_dispatch" adds a manual "Run workflow" button in the GitHub UI.
+  # The empty {} means no extra input parameters are needed.
+  workflow_dispatch: {}
+
+# ---------- Jobs ----------
+jobs:
+  web-eval:
+    runs-on: ubuntu-latest
+
+    # Longer timeout than CI (45 vs 25 min) because we run 20 questions
+    # with web search, which is slower due to network calls.
+    timeout-minutes: 45
+
+    steps:
+
+      # Step 1: Clone the repo (same as ci.yml).
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Step 2: Set up Python (same as ci.yml).
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # Step 3: Install dependencies (same as ci.yml).
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest
+
+      # Step 4: Run unit tests as a sanity check.
+      - name: Unit tests
+        run: |
+          pytest -q
+
+      # Step 5: Build the FAISS index (needed for local retrieval).
+      - name: Build local index (from docs/)
+        run: |
+          python -m src.rag_ingest_local
+
+      # Step 6: Run the nightly eval — the main purpose of this workflow.
+      # Key differences from CI:
+      #   - WEB_SEARCH=1    → forces web search path (tests Tavily integration)
+      #   - EVAL_N=20       → 20 questions (4x more than CI's 5)
+      #   - Same thresholds  → MIN_AVG_JUDGE=0.70, MIN_PASS_RATE=0.60
+      # This gives a more thorough quality signal, but costs more API credits
+      # which is why it runs nightly instead of on every push.
+      - name: Nightly eval (WEB ON)
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+          WEB_SEARCH: "1"
+          EVAL_N: "20"
+          MIN_AVG_JUDGE: "0.70"
+          MIN_PASS_RATE: "0.60"
+        run: |
+          python -m src.eval_smoke
+
+      # Step 7: Save the eval report even if the eval step failed.
+      # You can download this from the GitHub Actions UI to see
+      # which questions failed and why.
+      - name: Upload eval report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly_web_eval_report
+          path: artifacts/eval_smoke_report.json

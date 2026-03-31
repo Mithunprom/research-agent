@@ -1,39 +1,95 @@
+# =============================================================================
+# CI Workflow — Runs on every push to main and on every pull request.
+#
+# Think of this file as a recipe that GitHub's servers follow automatically.
+# Each "step" runs in order, top to bottom, on a fresh Ubuntu machine.
+# If any step fails, the whole workflow is marked as failed.
+#
+# YAML basics used here:
+#   key: value          — a setting (e.g., name: ci)
+#   - item              — a list item (e.g., each step is a list item)
+#   key:                — a nested block starts on the next indented line
+#   |                   — multi-line string (keeps newlines, used for shell commands)
+#   ${{ secrets.XYZ }}  — injects a secret stored in GitHub repo settings
+# =============================================================================
+
+# ---------- Metadata ----------
+# "name" is the label that appears in the GitHub Actions UI.
 name: ci
 
+# ---------- Triggers ----------
+# "on" defines WHEN this workflow runs.
+# This workflow triggers on:
+#   1. Any pull request (opened, updated, etc.)
+#   2. Any push to the "main" branch
 on:
-  pull_request:
+  pull_request:         # trigger on all PRs (any branch → any branch)
   push:
-    branches: ["main"]
+    branches: ["main"]  # trigger only when pushing to main
 
+# ---------- Jobs ----------
+# A workflow has one or more "jobs". Each job runs on its own machine.
+# Here we have a single job called "test-and-eval".
 jobs:
   test-and-eval:
+    # "runs-on" picks the operating system for the runner machine.
+    # "ubuntu-latest" = a fresh Linux VM provided free by GitHub.
     runs-on: ubuntu-latest
+
+    # Safety net: kill the job if it takes longer than 25 minutes
+    # (prevents runaway API calls from burning credits).
     timeout-minutes: 25
 
+    # ---------- Steps ----------
+    # Steps run sequentially, top to bottom.
+    # Each step is either:
+    #   "uses:" — a pre-built action from the GitHub Actions marketplace
+    #   "run:"  — a shell command (same as typing it in your terminal)
     steps:
+
+      # Step 1: Clone the repo onto the runner machine.
+      # Without this, the runner has an empty filesystem.
+      # "actions/checkout@v4" is a pre-built action maintained by GitHub.
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Step 2: Install Python 3.11 on the runner.
+      # The runner has Python pre-installed but we pin the version
+      # to match our development environment.
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
+      # Step 3: Install project dependencies.
+      # The "|" means "multi-line shell script" — each line runs in order.
       - name: Install
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pytest
 
+      # Step 4: Run unit tests.
+      # "-q" = quiet mode (less output). If any test fails, the step
+      # fails and the whole workflow stops here.
       - name: Unit tests
         run: |
           pytest -q
 
-      # Local docs index build (still useful even if web is forced)
+      # Step 5: Build the FAISS vector index from docs/.
+      # This is needed before eval can retrieve local chunks.
       - name: Build local index (from docs/)
         run: |
           python -m src.rag_ingest_local
 
+      # Step 6: Run the eval smoke test (the quality gate).
+      # "env:" injects environment variables into this step only.
+      # - secrets.OPENAI_API_KEY / TAVILY_API_KEY are stored in
+      #   GitHub → repo Settings → Secrets → Actions.
+      # - EVAL_N=5 means only test 5 questions (fast, cheap).
+      # - MIN_AVG_JUDGE=0.70 means average judge score must be >= 0.70.
+      # - MIN_PASS_RATE=0.60 means >= 60% of answers must pass.
+      # If thresholds aren't met, eval_smoke.py exits non-zero → step fails.
       - name: Eval smoke gate (WITH WEB)
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -44,6 +100,11 @@ jobs:
         run: |
           python -m src.eval_smoke
 
+      # Step 7: Upload the eval report as a downloadable artifact.
+      # "if: always()" means this step runs even if earlier steps failed,
+      # so you can always download the report to debug failures.
+      # The report JSON is available in the GitHub Actions UI under
+      # the workflow run → Artifacts section.
       - name: Upload eval artifact
         if: always()
         uses: actions/upload-artifact@v4
