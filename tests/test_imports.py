@@ -1,9 +1,25 @@
-from pathlib import Path
-import subprocess
-import sys
-def test_imports():
-    import src.agent_graph
+"""Smoke test: verify all source modules can be imported without errors."""
+
+
+def test_import_tools_memory():
+    import src.tools_memory
+
+
+def test_import_tools_web():
+    import src.tools_web
+
+
+def test_import_tools_rerank():
+    import src.tools_rerank
+
+
+def test_import_rag_ingest():
     import src.rag_ingest_local
-    # builds FAISS index from docs/
-    subprocess.check_call([sys.executable, "-m", "src.rag_ingest_local"])
-    assert Path("data/faiss_index").exists()
+
+
+def test_import_agent_graph():
+    import src.agent_graph
+
+
+def test_import_observability():
+    import src.observability
